@@ -1,35 +1,19 @@
 # FrostAuth-Rust-Example 🌟
 
-FrostAuth Rust example SDK for https://www.frostauth.cc license key API auth.
+Rust example for the [FrostAuth license key API](https://www.frostauth.cc/).
 
-This example ships the SDK source directly — `src/lib.rs` as the `frostauth`
-crate. Add the path to your `Cargo.toml`, mirror `src/main.rs`, and you're
-integrated. Deps from crates.io (tokio, reqwest, ed25519-dalek, …).
+Add `frostauth-sdk` to your Cargo project and import it as `frostauth`. See `src/main.rs` for the console example.
 
 ## Bugs
 
-If you're running this example with no significant changes and something's broken,
-open an issue with your FrostAuth version, Rust toolchain (`rustc -V`), and the
-exact error text.
-
-We do **NOT** provide support for wiring FrostAuth into your project. If the
-build steps below don't make sense yet, learn some Rust first (the Book/YouTube),
-then come back.
+Open an issue if you can reproduce the failure with the example. Include your FrostAuth SDK version, `rustc --version`, and the exact error. Remove license keys and tokens before posting.
 
 ## Security practices
 
-* Ship releases through a protector (VMProtect on the binary) and put license
-checks behind their markers, not just `main()`.
-* Run frequent integrity checks so patched memory kills the session instead of
-granting access.
-* Never write a downloaded file to disk if you don't want the user to have it.
-Execute in memory and wipe the buffer the moment you're done.
-* Treat every client answer as advisory. The server re-checks the license on
-each call — don't add a local `valid` boolean that bypasses it.
-
-FrostAuth signs every response and pins the server key, but no API survives a
-client that trusts itself. Obfuscation + integrity checks stop tampering; the
-API stops key sharing.
+- If you use VMProtect or Themida, put the protector's markers around the license checks.
+- Run integrity checks during the session. End the session if a check detects tampering.
+- Keep files you need to protect on the server. Clear temporary buffers when the app is done with them.
+- Use the API to recheck licenses and enforce access to server resources there. A local `isValid` flag alone can't enforce access.
 
 ## Copyright License
 
@@ -39,54 +23,46 @@ This SDK is distributed under Elastic License 2.0. See [LICENSE](LICENSE).
 
 ## What is FrostAuth?
 
-FrostAuth is a cloud licensing platform that protects your software from piracy
-and unauthorized access. Hardware-locked licenses, secure auth, real-time
-analytics, and a dashboard your customers never see. Client SDKs for Rust (this
-repo), C++, C#, Python, Go, Java, and JavaScript. Come ask questions on
-Discord: https://www.frostauth.cc/discord
+FrostAuth is a cloud licensing API with device-bound keys, app accounts, and a dashboard for managing licenses and tracking activations. SDKs are available for C++, C#, Go, Java, JavaScript, Python, and Rust. For product questions, join the [FrostAuth Discord](https://www.frostauth.cc/discord).
 
 ## Requirements
 
-* Rust 1.75+ (edition 2021). Windows MSVC needs the C++ redistributable +
-Windows SDK — if linking dies with `ucrt.lib not found`, use the GNU toolchain:
-`rustup toolchain install stable-x86_64-pc-windows-gnu`, then prefix every
-cargo command with `rustup run stable-x86_64-pc-windows-gnu`.
+Use a current stable Rust toolchain with Cargo. The Windows MSVC toolchain also needs the Visual Studio C++ build tools and Windows SDK. Dependencies are listed in `Cargo.toml`.
 
 ## Build
 
+Run these commands from the SDK directory after setting your product details in the example.
+
 ```bash
-cd FrostAuth-Rust-Example
-cargo build --release          # binary: target/release/frostauth-example(.exe)
-cargo run --release            # run the console example
+cargo build --locked --release
+cargo run --locked --release
 ```
 
-First build downloads ~40 crates — allow a few minutes. Integrate by adding
-the crate path to your `Cargo.toml`:
+Cargo puts the example binary in `target/release/`. To use the SDK from another crate, add a path dependency.
 
 ```toml
 [dependencies]
-frostauth = { path = "../frostauth" }
+frostauth = { package = "frostauth-sdk", path = "../path/to/sdk/langs/rust" }
 ```
 
-## ` frostAuth` instance definition — `Options`
+## `FrostAuthClient` instance definition
 
-Open your FrostAuth dashboard, pick your product, and copy the three values
-into [`src/main.rs`](src/main.rs):
+Copy the owner ID and product ID from the FrostAuth dashboard into `src/main.rs`. Set the version you plan to ship.
 
 ```rust
-let app = FrostAuth::new(Options {
-    owner: "YOUR-OWNER-ID".into(),     // dashboard → product → owner id
-    product: "YOUR-PRODUCT-ID".into(), // dashboard → product → product id
-    version: "1.0.0".into(),           // must match the version you ship
+use frostauth::{FrostAuthClient, Options};
+
+let app = FrostAuthClient::new(Options {
+    owner: "0809y7MP".into(),                                  // dashboard → product → owner id
+    product: "33abf48a-8e33-4df5-a4bd-d79195704d52".into(),    // dashboard → product → product id
+    version: "1.0.0".into(),                                   // must match the version you ship
     ..Default::default()
 })?;
 ```
 
 ## Initialize application
 
-You must call this before anything else. It fetches the public catalog and
-pins the server's signing key (TOFU) — every later response is Ed25519-checked
-against it, so a MITM serving a fake key aborts here instead of later.
+Call `init()` first. It fetches the public product catalog and checks the returned key ID and Ed25519 public key against the SDK's pin. The SDK uses the pinned key to verify signed responses.
 
 ```rust
 app.init().await?;
@@ -94,38 +70,36 @@ app.init().await?;
 
 ## Display application information
 
+Fetch application information after activation or sign-in returns a session token.
+
 ```rust
-let app_data = app.app_data().await.unwrap_or(serde_json::json!({}));
-let version = app_data.get("product").and_then(|p| p.get("version"));
-println!("App Version: {}", version.unwrap_or(&serde_json::json!("?")));
+let app_data = app.app_data().await?;
+println!("App version: {}", app_data["product"]["version"]);
 ```
 
 ## Check session validation
 
-Re-checks the license/session with the server. Falls back from a stale session
-token to the stored license key once.
+After activation or sign-in, call `validate()` to check the license again. If the API rejects a stale session token, the SDK retries once with the stored license key when it has one.
 
 ```rust
-app.validate().await?; // Err → session dead, exit, don't continue into paid code
+app.validate().await?;
 ```
 
 ## Check blacklist status
 
-Whether this device/IP/key is blacklisted. Optional: the server already
-refuses blacklisted callers on login/register, so this is just an early exit
-for clients that want to close before showing UI.
+Check the blacklist with an active session. The API also checks it during activation and sign-in.
 
 ```rust
-app.check_blacklist().await?; // Err → blocked, exit
+app.check_blacklist().await?;
 ```
 
 ## Login with username/password
 
+Supply the account credentials. If the account uses two-factor authentication, include its code.
+
 ```rust
 let snap = app.login(&username, &password, None, None, None).await?;
 ```
-
-(`twofa`, build hash, and label ride the last three `Option`s.)
 
 ## Register with username/password/key
 
@@ -135,9 +109,7 @@ let snap = app.register(&key, &username, &password, None, None).await?;
 
 ## Upgrade user with key
 
-Attaches a license key to an existing app user (adds time). Unlike login and
-register this opens **no session** — sign the user in after a successful
-upgrade.
+Apply the key to the existing account. Sign in after the upgrade to open a session.
 
 ```rust
 app.upgrade(&username, &password, &key).await?;
@@ -147,19 +119,17 @@ let snap = app.login(&username, &password, None, None, None).await?;
 
 ## Login with just license key
 
-For key-only products. Binds the key to this machine and opens a session —
-no username needed.
+For a key-only product, activate with the license key. The API applies the product's device rules and issues a session token where supported.
 
 ```rust
 let snap = app.activate(&key, None, None).await?;
 ```
 
-Extra build evidence: `app.activate(&key, Some(self_hash), Some(label))`
-when the product has hash checks on.
+Pass the build hash and device label as `Some(value)` when you supply them.
 
 ## User Data
 
-Everything about the current session lives in the snapshot:
+Read the current user, account, device, and subscriptions from the snapshot.
 
 ```rust
 let snap = app.snapshot();
@@ -170,21 +140,20 @@ println!("Device Id: {}", snap.pointer("/device/id").unwrap_or(&serde_json::json
 
 ## Check subscription of user
 
-Gate features by tier. Compare against the tier name you configured on the
-dashboard — exact match, case-insensitive on the server side.
+Use the tier name you set in the dashboard. The example checks for `pro`.
 
 ```rust
 let pro = snap.get("subscriptions").and_then(|s| s.as_array()).map(|subs| {
     subs.iter().any(|s| s.get("tier").and_then(|t| t.as_str()).unwrap_or("").eq_ignore_ascii_case("pro"))
 }).unwrap_or(false);
-if !pro { println!("This feature needs a Pro subscription."); return; }
+if !pro {
+    println!("This feature needs a Pro subscription.");
+}
 ```
 
 ## Application variables
 
-Server-side strings, global for all users (feature flags, MOTD, config).
-Read-only from the client; edit them on the dashboard. Tier- and
-version-gated server-side.
+Edit shared variables in the dashboard. The API applies each variable's tier and version rules on read.
 
 ```rust
 println!("MOTD: {}", app.variable("maintenance_message").await?);
@@ -192,11 +161,10 @@ println!("MOTD: {}", app.variable("maintenance_message").await?);
 
 ## User Variables
 
-Per-user key/value pairs. Read and write them unless the operator marked one
-read-only (balances, ranks — server-writable only).
+Read or update values for the signed-in user. The API rejects writes to variables the operator marked read-only.
 
 ```rust
-let vars = app.list_vars().await?;          // every variable on this user
+println!("{:?}", app.list_vars().await?);
 let theme = app.get_var("theme").await?;    // one variable's value
 app.set_var("theme", "dark").await?;        // write it back
 println!("theme: {theme}");
@@ -204,9 +172,7 @@ println!("theme: {theme}");
 
 ## Application Logs
 
-Ship an event to the operator log. Good for anti-debug alerts and crash
-breadcrumbs. If the operator set a Discord webhook, it lands there instead of
-the dashboard (dashboard logs rotate after 30 days).
+Send an event to the operator's log. The product's logging settings determine where it appears.
 
 ```rust
 app.log("client started, integrity check passed").await?;
@@ -214,49 +180,26 @@ app.log("client started, integrity check passed").await?;
 
 ## Ban the user
 
-Blacklists the HWID + IP. Call it when your integrity checks catch tampering.
-Only works after login. Ends the local session either way.
+Use an active session to ban the current device and IP address. The call also ends the local session.
 
 ```rust
 app.ban("debugger detected").await?; // reason shows on next login + dashboard
 ```
 
-## Server-sided webhooks
+## Server-side webhooks
 
-Fire an operator-configured webhook by id. The destination URL lives on the
-server — the client only supplies params/body, so secrets never ship in your
-binary. Tier-gated like files/variables.
+Call a webhook by its configured ID. The API stores the destination and the client supplies the parameters and body.
 
 ```rust
 let res = app.webhook("discord", "", r#"{"content":"Hello from FrostAuth"}"#, "").await?;
 println!("upstream: {} ok: {}", res["status"], res["ok"]);
 ```
 
-## Download file
-
-> Currently disabled server-side (route unmounted). `file()` returns
-> `SERVER_ERROR` until file storage ships. The snippet below is the
-> integration pattern for when it lands.
-
-```rust
-let bytes = app.file("loader").await?;
-std::fs::write("loader.bin", &bytes)?;
-```
-
-## Changing username
-
-Lets a signed-in user rename themselves (password re-checked server-side).
-
-```rust
-let res = app.change_username(&new_name, &password).await?;
-println!("Renamed to {}", res["username"]);
-```
-
 ## Heartbeat & offline
 
-`validate()` on a timer keeps the session fresh. The SDK caches a signed
-offline assertion — when the network drops, `check_offline()` verifies it
-locally so the app keeps working inside the grace window.
+After activation or sign-in, start the heartbeat. `check_offline()` verifies the cached signed assertion, including its expiry. If the assertion has expired or fails verification during an outage, the next failed heartbeat clears the active state. An invalid API response signature also stops the heartbeat and clears the active state.
+
+Set `Options::offline_grace_seconds` to change the 15-minute fallback for sessions that received no assertion.
 
 ```rust
 let _hb = app.start_heartbeat(None)?; // server cadence until stop/close
@@ -268,7 +211,13 @@ app.stop_heartbeat();
 app.close();
 ```
 
+## Compatibility checks
+
+On Linux, run `bash sdk/compatibility/run.sh rust` from the Cerberus root. The suite tests activation, validation, signed errors, and offline heartbeat behavior against a local API fixture.
+
+This SDK initialized successfully against the live FrostAuth API on November 18, 2026. A live activation and heartbeat require a disposable license.
+
 ## SDK layout
 
-* `src/lib.rs` — the whole SDK as the `frostauth` crate.
-* `src/main.rs` — the interactive demo this README walks through.
+- `src/lib.rs` contains the SDK.
+- `src/main.rs` runs the interactive example.
