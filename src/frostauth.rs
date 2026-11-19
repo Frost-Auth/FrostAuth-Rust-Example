@@ -1,15 +1,3 @@
-//! FrostAuth SDK — Rust port.
-//!
-//! Mirrors sdk/frostauth.js wire behavior:
-//!  - every response is Ed25519-verified over
-//!    `timestamp\nnonce\nmethod\npath\nstatus\nbody` (±60s skew, pinned key IDs),
-//!  - `init()` pins the server public key against the key baked into this build,
-//!  - offline assertions verified locally when the network is gone,
-//!  - DNS-hijack tripwire refuses loopback/private answers before any licence
-//!    material is sent.
-//!
-//! Runtime: tokio. HTTP: reqwest. Crypto: ed25519-dalek.
-
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine;
 use ed25519_dalek::{Signature, VerifyingKey, Verifier, PUBLIC_KEY_LENGTH};
@@ -28,8 +16,6 @@ const MAX_SIGNATURE_SKEW_MS: i128 = 60_000;
 const MAX_RETRY_AFTER_SECONDS: u64 = 10;
 const ASSERTION_PREFIX: &str = "frostauth:assertion:v1";
 
-/// Signing keys baked into this build (TOFU). The server must serve one of
-/// these by key ID during `init()`.
 pub fn public_keys() -> HashMap<String, String> {
     let mut m = HashMap::new();
     m.insert(
@@ -39,7 +25,6 @@ pub fn public_keys() -> HashMap<String, String> {
     m
 }
 
-/// Error codes carried by [`FrostAuthError`].
 pub mod codes {
     pub const CONFIG: &str = "CONFIG";
     pub const NETWORK: &str = "NETWORK";
@@ -84,8 +69,6 @@ impl FrostAuthError {
 
 type Result<T> = std::result::Result<T, FrostAuthError>;
 
-// ── keys ─────────────────────────────────────────────────────────────────────
-
 fn b64u_decode(s: &str) -> Result<Vec<u8>> {
     URL_SAFE_NO_PAD
         .decode(s.trim())
@@ -97,7 +80,6 @@ fn b64u_encode(b: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(b)
 }
 
-/// base64url SPKI DER (44 bytes: fixed 12-byte header + raw Ed25519 key).
 fn spki_to_raw(b64: &str) -> Result<[u8; PUBLIC_KEY_LENGTH]> {
     let der = b64u_decode(b64)?;
     if der.len() != 44 {
@@ -121,8 +103,6 @@ fn verifying_keys(pins: &HashMap<String, String>) -> Result<Vec<(String, Verifyi
     }
     Ok(out)
 }
-
-// ── assertions ───────────────────────────────────────────────────────────────
 
 fn claim_string(claims: &Value) -> Vec<u8> {
     let g = |k: &str| claims.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -159,8 +139,6 @@ fn now_ms() -> i128 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i128).unwrap_or(0)
 }
 
-/// Verify a server-issued offline assertion against pinned keys.
-/// Returns `(ok, reason, claims)`. Fails closed on unreadable windows.
 pub fn verify_assertion(
     assertion: &str,
     pins: &HashMap<String, String>,
@@ -250,8 +228,6 @@ pub fn verify_assertion(
     (true, String::new(), Some(claims))
 }
 
-// ── machine identity ─────────────────────────────────────────────────────────
-
 fn run_cmd(program: &str, args: &[&str]) -> Option<String> {
     let out = std::process::Command::new(program).args(args).output().ok()?;
     if out.status.success() {
@@ -307,7 +283,6 @@ fn hostname() -> String {
     std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "unknown".into())
 }
 
-/// Scoped SHA-256 of the machine id — the raw id never leaves the device.
 pub fn hardware_id(scope: &str) -> String {
     let scope = if scope.is_empty() { "frostauth" } else { scope };
     let mut h = Sha256::new();
@@ -342,7 +317,6 @@ fn mac_addresses() -> Vec<String> {
         "windows" => {
             if let Some(csv) = run_cmd("getmac", &["/fo", "csv", "/nh"]) {
                 for line in csv.lines() {
-                    // "AA-BB-CC-DD-EE-FF Hardware ..." — quoted first field
                     let inner = line.trim().trim_matches('"');
                     if let Some(first) = inner.split('"').next() {
                         let m = first.trim().to_lowercase().replace('-', ":");
@@ -380,7 +354,6 @@ fn mac_addresses() -> Vec<String> {
     out
 }
 
-/// Advisory anti-clone facets. Only hashed values leave the device.
 pub fn hardware_profile() -> (Vec<(String, String)>, bool) {
     let cpu = match std::env::consts::OS {
         "windows" => run_cmd("reg", &[
@@ -423,8 +396,6 @@ pub fn hardware_profile() -> (Vec<(String, String)>, bool) {
     let virtualized = (all_vm && !macs.is_empty()) || vm_name(&cpu);
     (components, virtualized)
 }
-
-// ── DNS-hijack tripwire ──────────────────────────────────────────────────────
 
 fn is_private_ip(ip: IpAddr) -> bool {
     match ip {
@@ -481,8 +452,6 @@ fn host_of(url: &str) -> String {
     rest.split(['/']).next().unwrap_or("").split(':').next().unwrap_or("").to_string()
 }
 
-// ── client ───────────────────────────────────────────────────────────────────
-
 struct Inner {
     pins_b64: HashMap<String, String>,
     keys: Vec<(String, VerifyingKey)>,
@@ -504,8 +473,6 @@ struct Inner {
     closed: bool,
 }
 
-/// Events emitted by the heartbeat task. Assign these on the client before
-/// calling [`FrostAuthClient::start_heartbeat`].
 #[derive(Default, Clone)]
 pub struct Hooks {
     pub on_activated: Option<Arc<dyn Fn(&Value) + Send + Sync>>,
@@ -517,7 +484,6 @@ pub struct Hooks {
     pub on_needs_activation: Option<Arc<dyn Fn(&FrostAuthError) + Send + Sync>>,
 }
 
-/// Options for [`FrostAuthClient::new`].
 pub struct Options {
     pub owner: String,
     pub product: String,
@@ -526,10 +492,8 @@ pub struct Options {
     pub timeout: Duration,
     pub retries: u32,
     pub offline_grace_seconds: u64,
-    /// Optional extra TOFU pins before init (map of keyId -> base64url SPKI).
     pub public_key: HashMap<String, String>,
     pub allow_insecure: bool,
-    /// Skip the DNS-hijack tripwire (lab/private deployments only).
     pub allow_private_dns: bool,
     pub hardware_id_override: Option<String>,
     pub collect_hardware: bool,
@@ -554,7 +518,6 @@ impl Default for Options {
     }
 }
 
-/// The FrostAuth client. Create with [`FrostAuthClient::new`], then `init()`.
 pub struct FrostAuthClient {
     base_url: String,
     owner: String,
@@ -572,7 +535,6 @@ pub struct FrostAuthClient {
 }
 
 impl FrostAuthClient {
-    /// Validates options and builds the client. Call [`Self::init`] next.
     pub fn new(o: Options) -> Result<Arc<Self>> {
         for (name, v) in [("owner", &o.owner), ("product", &o.product), ("version", &o.version)] {
             if v.trim().is_empty() {
@@ -637,7 +599,6 @@ impl FrostAuthClient {
         })
     }
 
-    /// Fetches the public catalog and pins the server's signing key (TOFU).
     pub async fn init(self: &Arc<Self>) -> Result<Value> {
         if !self.allow_private_dns {
             assert_real_host(&self.base_url)?;
@@ -717,7 +678,6 @@ impl FrostAuthClient {
         })
     }
 
-    /// Binds a licence key to this machine and opens a session.
     pub async fn activate(self: &Arc<Self>, key: &str, extra_hash: Option<&str>, label: Option<&str>) -> Result<Value> {
         self.require_init()?;
         if key.trim().is_empty() {
@@ -744,7 +704,6 @@ impl FrostAuthClient {
         Ok(self.snapshot())
     }
 
-    /// Creates an app user from a licence key, then opens a session.
     pub async fn register(
         self: &Arc<Self>, key: &str, username: &str, password: &str,
         extra_hash: Option<&str>, label: Option<&str>,
@@ -774,7 +733,6 @@ impl FrostAuthClient {
         Ok(self.snapshot())
     }
 
-    /// Signs in an app user and opens a session.
     pub async fn login(
         self: &Arc<Self>, username: &str, password: &str,
         twofa: Option<&str>, extra_hash: Option<&str>, label: Option<&str>,
@@ -801,7 +759,6 @@ impl FrostAuthClient {
         Ok(self.snapshot())
     }
 
-    /// Attaches a licence key to an existing app user.
     pub async fn upgrade(self: &Arc<Self>, username: &str, password: &str, key: &str) -> Result<Value> {
         self.require_init()?;
         self.request_envelope(Method::POST, "/api/v1/sdk/upgrade", Some(json!({
@@ -823,7 +780,6 @@ impl FrostAuthClient {
         }
     }
 
-    /// Invalidates the session server-side and closes the client.
     pub async fn logout(self: &Arc<Self>) -> Result<Value> {
         let had = self.session_token().is_some();
         let out = if had {
@@ -835,7 +791,6 @@ impl FrostAuthClient {
         out
     }
 
-    /// Re-fetches and adopts current session state.
     pub async fn session(self: &Arc<Self>) -> Result<Value> {
         let data = self.authed(Method::GET, "/api/v1/sdk/session", None).await?;
         let mut g = self.inner.lock().unwrap();
@@ -902,14 +857,10 @@ impl FrostAuthClient {
         self.authed(Method::GET, "/api/v1/sdk/app", None).await
     }
 
-    /// File downloads a product file by handle. Currently disabled
-    /// server-side (route unmounted) — mirrors the JS reference SDK.
     pub async fn file(self: &Arc<Self>, _id: &str) -> Result<Vec<u8>> {
         Err(FrostAuthError::new(codes::SERVER_ERROR, 0, "File downloads are disabled on this server"))
     }
 
-    /// Re-checks the licence/session with the server. Falls back from a stale
-    /// session token to the stored licence key once.
     pub async fn validate(self: &Arc<Self>) -> Result<Value> {
         self.require_init()?;
         {
@@ -970,8 +921,6 @@ impl FrostAuthClient {
         self.request_envelope(Method::POST, "/api/v1/validate", Some(payload), None).await
     }
 
-    /// Spawns a tokio task that validates periodically until `stop_heartbeat`
-    /// / `close`, honoring the offline assertion within the grace window.
     pub fn start_heartbeat(self: &Arc<Self>, interval_seconds: Option<u64>) -> Result<tokio::task::JoinHandle<()>> {
         {
             let mut g = self.inner.lock().unwrap();
@@ -1041,14 +990,10 @@ impl FrostAuthClient {
         }))
     }
 
-    /// API parity with the JS SDK; the heartbeat task ends when `close()`
-    /// is called (or drop the handle from `start_heartbeat` to abort early).
     pub fn stop_heartbeat(&self) {
         // The task exits itself when closed; closing is the stop signal.
-        // (Provided for API parity; the handle from start_heartbeat can abort.)
     }
 
-    /// Tears down the client and drops the offline assertion.
     pub fn close(&self) {
         let mut g = self.inner.lock().unwrap();
         g.closed = true;
@@ -1062,7 +1007,6 @@ impl FrostAuthClient {
         g.offline_since = None;
     }
 
-    /// Verifies the last server-issued assertion locally.
     pub fn check_offline(&self) -> (bool, String) {
         let g = self.inner.lock().unwrap();
         match &g.assertion {
@@ -1078,8 +1022,6 @@ impl FrostAuthClient {
             }
         }
     }
-
-    // ── internals ────────────────────────────────────────────────────────
 
     fn adopt_locked(g: &mut Inner, data: &Value) {
         if data["session"]["token"].is_string() {
@@ -1233,14 +1175,13 @@ impl FrostAuthClient {
                 Ok(pair) => pair,
                 Err(err) => {
                     if err.code == codes::SIGNATURE {
-                        return Err(err); // never retry a failed signature
+                        return Err(err);
                     }
                     last_err = Some(err);
                     continue;
                 }
             };
 
-            // 429s are unsigned by design; everything else was already verified.
             if status == StatusCode::TOO_MANY_REQUESTS {
                 let wait = last_err_wait(&raw);
                 let err = FrostAuthError {
@@ -1302,9 +1243,6 @@ impl FrostAuthClient {
 }
 
 fn last_err_wait(raw: &[u8]) -> u64 {
-    // The retry-after header was consumed in one_request's response; simplest
-    // consistent behavior: parse any numeric hint from headers is not available
-    // here, so default to 2s like the JS port's fallback.
     let _ = raw;
     2
 }
