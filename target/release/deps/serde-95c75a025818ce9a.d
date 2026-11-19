@@ -1,0 +1,14 @@
+C:\Users\redee\Desktop\Cerberus-Prod-Canary\sdk\langs\rust\target\release\deps\serde-95c75a025818ce9a.d: C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\redee\Desktop\Cerberus-Prod-Canary\sdk\langs\rust\target\release\build\serde-30e2426575de9239\out/private.rs
+
+C:\Users\redee\Desktop\Cerberus-Prod-Canary\sdk\langs\rust\target\release\deps\libserde-95c75a025818ce9a.rlib: C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\redee\Desktop\Cerberus-Prod-Canary\sdk\langs\rust\target\release\build\serde-30e2426575de9239\out/private.rs
+
+C:\Users\redee\Desktop\Cerberus-Prod-Canary\sdk\langs\rust\target\release\deps\libserde-95c75a025818ce9a.rmeta: C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\redee\Desktop\Cerberus-Prod-Canary\sdk\langs\rust\target\release\build\serde-30e2426575de9239\out/private.rs
+
+C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs:
+C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs:
+C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs:
+C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs:
+C:\Users\redee\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs:
+C:\Users\redee\Desktop\Cerberus-Prod-Canary\sdk\langs\rust\target\release\build\serde-30e2426575de9239\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\redee\\Desktop\\Cerberus-Prod-Canary\\sdk\\langs\\rust\\target\\release\\build\\serde-30e2426575de9239\\out

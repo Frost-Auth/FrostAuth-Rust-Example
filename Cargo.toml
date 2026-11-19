@@ -1,0 +1,25 @@
+[package]
+name = "frostauth-sdk"
+version = "1.0.0"
+edition = "2021"
+license = "Elastic-2.0"
+description = "FrostAuth licensing SDK — Rust port"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde_json = "1"
+ed25519-dalek = "2"
+base64 = "0.22"
+rand = "0.8"
+sha2 = "0.10"
+chrono = "0.4"
+regex = "1"
+
+[[bin]]
+name = "frostauth-example"
+path = "src/main.rs"
+
+[lib]
+name = "frostauth"
+path = "src/lib.rs"
