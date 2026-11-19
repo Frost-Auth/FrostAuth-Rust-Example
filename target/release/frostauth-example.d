@@ -1,1 +1,0 @@
-C:\Users\redee\Desktop\Cerberus-Prod-Canary\sdk\langs\rust\target\release\frostauth-example.exe: C:\Users\redee\Desktop\Cerberus-Prod-Canary\sdk\langs\rust\src\lib.rs C:\Users\redee\Desktop\Cerberus-Prod-Canary\sdk\langs\rust\src\main.rs
