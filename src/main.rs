@@ -1,13 +1,8 @@
-//! FrostAuth Rust SDK — console example. Mirrors sdk/example.mjs output.
-//! Fill owner/product from your dashboard; set version to the build you ship.
-
 use chrono::{DateTime, Local};
 use frostauth::{FrostAuthClient, Options};
 use sha2::{Digest, Sha256};
 use std::io::{self, Write};
 
-/// Locale-style timestamp, e.g. 9/16/2026, 6:08:02 PM (local zone, like JS
-/// `Date#toLocaleString()`).
 fn loc(iso: &str) -> String {
     match DateTime::parse_from_rfc3339(iso) {
         Ok(dt) => dt.with_timezone(&Local).format("%-m/%-d/%Y, %-I:%M:%S %p").to_string(),
@@ -84,12 +79,6 @@ async fn main() {
     dashboard(&client).await;
 }
 
-/// Snapshot-backed profile readout. Everything here comes from the local
-/// snapshot (populated by activate/register/login on every plan), so it works
-/// with or without a session token — unlike app_data/online, which are
-/// session-backed and fail on plans without tokenSystem.
-/// Only prints fields the backend actually returns (licenseView + accountView
-/// + device + product) — no invented email/key/plan lookups.
 fn show_user(snap: &serde_json::Value) {
     let str_of = |v: &serde_json::Value, key: &str| -> String {
         v.get(key).and_then(|x| x.as_str()).unwrap_or("").to_string()
@@ -204,9 +193,6 @@ fn show_user(snap: &serde_json::Value) {
 }
 
 async fn dashboard(client: &std::sync::Arc<FrostAuthClient>) {
-    // Snapshot-backed only. Session-backed reads (app_data/online) are
-    // plan-gated (tokenSystem: Developer/Pro) and print "unknown" on other
-    // plans, so they are not shown here at all.
     let snap = client.snapshot();
 
     show_user(&snap);
@@ -254,9 +240,7 @@ async fn dashboard(client: &std::sync::Arc<FrostAuthClient>) {
         }
         Err(e) => println!("\nWebhook test failed: {} {e}", e.code),
     }
-
-    // Build-hash extra: hash THIS binary's contents when the product has
-    // CHECK HASH enabled; pass Some(hash) to activate/register/login.
+    
     let self_hash = std::env::current_exe()
         .ok()
         .and_then(|p| std::fs::read(p).ok())
